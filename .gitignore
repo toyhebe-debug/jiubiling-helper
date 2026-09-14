@@ -1,0 +1,11 @@
+/node_modules
+docs/
+dist/
+.private/
+.env*
+!.env.example
+.wrangler/
+wrangler.deploy.json
+*.tsbuildinfo
+.DS_Store
+.dev.vars*

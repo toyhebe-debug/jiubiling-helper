@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';import fs from 'node:fs';
+const base='http://127.0.0.1:8787';const setupToken=JSON.parse(fs.readFileSync('.private/test-token.json','utf8')).token;const password='local-check-only-123456';
+async function req(path,method='GET',body,token,origin='https://toyhebe-debug.github.io'){const r=await fetch(base+path,{method,headers:{Origin:origin,...(body?{'Content-Type':'application/json'}:{}),...(token?{Authorization:'Bearer '+token}:{})},body:body?JSON.stringify(body):undefined});return {status:r.status,data:await r.json(),headers:r.headers}}
+assert.equal((await req('/api/family')).status,401);
+assert.equal((await req('/api/auth/status')).data.configured,false);
+assert.equal((await req('/api/auth/setup','POST',{password,setupToken:'0'.repeat(64)})).status,403);
+const setup=await req('/api/auth/setup','POST',{password,setupToken});assert.equal(setup.status,200);const a=setup.data.token;assert.equal(a.length,64);
+assert.equal((await req('/api/auth/setup','POST',{password,setupToken})).status,409);
+assert.equal((await req('/api/auth/login','POST',{password:'wrong-password-1234'})).status,401);
+const login=await req('/api/auth/login','POST',{password});assert.equal(login.status,200);const b=login.data.token;assert.notEqual(a,b);
+const loaded=await req('/api/family','GET',undefined,a);assert.equal(loaded.status,200);
+const packet={operationId:crypto.randomUUID(),baseVersion:loaded.data.version,data:structuredClone(loaded.data.data)};packet.data.stocks[0].amount=7;
+const saved=await req('/api/family','PUT',packet,a);assert.equal(saved.status,200);
+assert.equal((await req('/api/family','GET',undefined,b)).data.data.stocks[0].amount,7);
+assert.equal((await req('/api/family','PUT',packet,a)).data.version,saved.data.version);
+assert.equal((await req('/api/family','PUT',{...packet,operationId:crypto.randomUUID()},b)).status,409);
+const valid={...packet,operationId:crypto.randomUUID(),baseVersion:saved.data.version};const invalid=structuredClone(valid);invalid.data.dueDate='2026-02-30';assert.equal((await req('/api/family','PUT',invalid,a)).status,400);
+assert.equal((await req('/api/family','GET',undefined,a,'https://example.invalid')).status,403);
+const pair=await Promise.all([req('/api/family','PUT',{...valid,operationId:crypto.randomUUID()},a),req('/api/family','PUT',{...valid,operationId:crypto.randomUUID()},b)]);assert.deepEqual(pair.map(r=>r.status).sort(),[200,409]);
+assert.equal((await req('/api/auth/logout','POST',undefined,a)).status,200);
+assert.equal((await req('/api/family','GET',undefined,a)).status,401);
+assert.equal((await req('/api/family','GET',undefined,b)).status,200);
+let limited=false;for(let i=0;i<10;i++){if((await req('/api/auth/login','POST',{password:'wrong-password-1234'})).status===429){limited=true;break}}assert.equal(limited,true);
+console.log('PASS: setup secret, one-time setup, two-device login, unauthorized denial, shared persistence, idempotence, stale edits, validation, CORS, concurrent updates, logout isolation, login throttling.');

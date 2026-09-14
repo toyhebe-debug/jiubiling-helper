@@ -1,0 +1,17 @@
+{
+  "name": "九比灵小助手 · 家里备货与产检",
+  "short_name": "九比灵小助手",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#faf7f2",
+  "theme_color": "#faf7f2",
+  "icons": [
+    {
+      "src": "./favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "scope": "./"
+}

@@ -1,0 +1,17 @@
+import {useEffect,useState} from 'react';import {Heart,LockKeyhole,ArrowRight,Eye,EyeOff} from 'lucide-react';import FamilyApp from './family-app';import {apiFetch,clearSession,saveSession,sessionToken} from '@/lib/api';
+export default function App(){
+ const [signed,setSigned]=useState(!!sessionToken()),[configured,setConfigured]=useState<boolean|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[visible,setVisible]=useState(false);
+ const [setupToken]=useState(()=>new URLSearchParams(location.hash.slice(1)).get('setup')||'');
+ const setup=configured===false&&setupToken.length===64;
+ async function check(){try{const r=await apiFetch('/api/auth/status');const d=await r.json() as {configured:boolean;error?:string};if(!r.ok)throw new Error(d.error);setConfigured(d.configured);setError('')}catch{setError('暂时没连上共享服务，请稍后重试。')}}
+ useEffect(()=>{void check();const needAuth=()=>setSigned(false);window.addEventListener('jiubiling-auth-required',needAuth);return()=>window.removeEventListener('jiubiling-auth-required',needAuth)},[]);
+ async function logout(){try{await apiFetch('/api/auth/logout',{method:'POST'})}finally{clearSession();setSigned(false)}}
+ async function submit(e:React.FormEvent<HTMLFormElement>){
+ e.preventDefault();if(busy)return;const f=new FormData(e.currentTarget);const password=String(f.get('password')||'');if(setup&&password!==f.get('confirm')){setError('两次密码不一致。');return}
+ setBusy(true);setError('');
+ try{const r=await apiFetch(setup?'/api/auth/setup':'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password,...(setup?{setupToken}:{})})});const d=await r.json() as {token:string;expiresAt:number;error?:string};if(!r.ok)throw new Error(d.error||'暂时无法登录。');saveSession(d);history.replaceState(null,'',location.pathname+location.search);setConfigured(true);setSigned(true)}
+ catch(e){setError(e instanceof Error?e.message:'暂时无法登录。')}finally{setBusy(false)}
+ }
+ if(signed)return <FamilyApp onLogout={logout}/>;
+ return <main className="auth-shell"><header className="topbar"><span className="brand"><Heart size={19}/> 九比灵小助手</span></header><section className="auth-card"><div className="auth-icon"><LockKeyhole size={27}/></div><p className="eyebrow">我们的小家</p><h1>{setup?'设置家庭密码':'缺什么记什么'}</h1><p className="auth-description">{setup?'两人共用这个密码，手机会保留登录状态。':'输入家庭密码，看看家里要准备什么。'}</p>{configured===null?<><p className="auth-message">{error||'正在连接共享服务…'}</p>{error&&<button className="secondary" onClick={check}>重新连接</button>}</>:configured===false&&!setup?<p className="auth-message">家庭空间正在准备，设置好密码后就能一起用了。</p>:<form className="edit-form" onSubmit={submit}><label>家庭密码<div className="password-input"><input name="password" type={visible?'text':'password'} autoComplete={setup?'new-password':'current-password'} minLength={12} maxLength={128} required placeholder={setup?'至少 12 个字符':'输入你们的家庭密码'}/><button type="button" aria-label={visible?'隐藏密码':'显示密码'} onClick={()=>setVisible(!visible)}>{visible?<EyeOff size={19}/>:<Eye size={19}/>}</button></div></label>{setup&&<label>再输入一次<input name="confirm" type="password" autoComplete="new-password" minLength={12} maxLength={128} required/></label>}{error&&<p className="form-error" role="alert">{error}</p>}<button className="primary" disabled={busy}>{busy?'请稍等…':setup?'设置并进入':'进入我们的小家'}<ArrowRight size={17}/></button></form>}</section><footer className="page-footer"><Heart size={13}/> 九比灵来帮您</footer></main>;
+}
