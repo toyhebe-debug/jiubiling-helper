@@ -1,0 +1,49 @@
+import {useState} from 'react';
+import {Check,Plus,Search,Settings2,PackageCheck,House,BriefcaseBusiness,X} from 'lucide-react';
+import {Dialog,DialogContent,DialogTitle,DialogDescription,DialogClose} from '@/components/ui/dialog';
+import {categories,progress,purchaseLabels,setPurchase,visibleItems} from '@/lib/preparation';
+import type {Delivery,Place,PrepItem,Preparation,Purchase} from '@/lib/preparation';
+
+type Filter='all'|'unknown'|'todo'|'bought'|'unpacked'|'skip';
+const filterLabels:Record<Filter,string>={all:'全部',unknown:'待确认',todo:'待买 / 待备',bought:'已买 / 已有',unpacked:'还没装包',skip:'暂不需要'};
+const priorityLabels={basic:'基础准备',optional:'按需添置',confirm:'先问医院'};
+type Props={preparation:Preparation;place:Place;saving:boolean;version:number;onChange:(p:Preparation,version?:number)=>Promise<boolean>};
+
+export default function PreparationPanel({preparation:p,place,saving,version,onChange}:Props){
+ const [filter,setFilter]=useState<Filter>('all'),[query,setQuery]=useState('');
+ const [editing,setEditing]=useState<{item:PrepItem;isNew:boolean;version:number}|null>(null),[error,setError]=useState('');
+ const hospital=place==='hospital';
+ const all=visibleItems(p,place),counts=progress(all,place);
+ const filtered=all.filter(i=>(filter==='all'||filter==='unpacked'?(filter==='all'||(!i.packed&&i.status!=='skip')):i.status===filter)&&(!query||[i.name,i.note,i.guidance].join(' ').toLowerCase().includes(query.toLowerCase())));
+ async function changeItem(item:PrepItem){await onChange({...p,items:p.items.map(i=>i.id===item.id?item:i)},version)}
+ function edit(item:PrepItem,isNew=false){setError('');setEditing({item:structuredClone(item),isNew,version})}
+ function add(){edit({id:crypto.randomUUID(),name:'',category:hospital?'妈妈用品':'宝宝用品',places:[place],delivery:'both',priority:'basic',hospitalQty:hospital?'按需':'',homeQty:hospital?'':'按需',guidance:'',source:'自己添加',status:'unknown',packed:false,note:''},true)}
+ async function submit(event:React.FormEvent<HTMLFormElement>){
+  event.preventDefault();if(!editing||saving)return;setError('');
+  if(editing.version!==version){setError('另一台设备更新了记录。请关闭后重新打开这件物品再改；当前输入还保留着。');return}
+  const form=new FormData(event.currentTarget),str=(k:string)=>String(form.get(k)||'').trim();
+  const places:Place[]=str('place')==='both'?['hospital','home']:[str('place') as Place];
+  const item:PrepItem={...editing.item,name:str('name'),category:str('category') as PrepItem['category'],places,hospitalQty:str('hospitalQty'),homeQty:str('homeQty'),note:str('note'),priority:str('priority') as PrepItem['priority'],delivery:str('delivery') as Delivery,packed:places.includes('hospital')&&editing.item.packed};
+  if(!item.name){setError('给物品起个名字。');return}
+  const ok=await onChange({...p,items:editing.isNew?[...p.items,item]:p.items.map(i=>i.id===item.id?item:i)},editing.version);
+  if(ok){if(editing.isNew){setFilter('all');setQuery(item.places.includes(place)?item.name:'')}setEditing(null)}else setError('这次还没保存。请检查页面的同步提示后再试。');
+ }
+ return <section className="prep-panel">
+  <div className={'prep-hero '+(hospital?'':'at-home')}><div className="prep-hero-top"><div className="prep-symbol">{hospital?<BriefcaseBusiness size={26}/>:<House size={26}/>}</div><div><p className="eyebrow">{hospital?'出发时，少一份慌张':'回家后，慢慢过日子'}</p><h2>{hospital?'待产包 · 带去医院':'母婴用品 · 家里准备'}</h2></div></div><p>{hospital?'照医院清单收拾，买好之后再标记装包。':'先把用得上的备好，其他需要时再添。'}</p><div className="prep-progress"><strong>{counts.ready}<small> / {counts.total}</small></strong><span>{hospital?'项已装包':'项已备好'}<br/><small>{counts.unknown} 项待确认 · {counts.todo} 项待买 / 待备</small></span></div><div className="prep-meter" role="progressbar" aria-label={hospital?'装包进度':'家中准备进度'} aria-valuenow={counts.ready} aria-valuemin={0} aria-valuemax={Math.max(1,counts.total)}><i style={{width:(counts.total?counts.ready/counts.total*100:0)+'%'}}/></div><p className="prep-caption">{hospital?`已买 / 已有 ${counts.bought} 项；数量凑齐后再标记装包。`:'“已买 / 已有”表示数量已够；借用、别人送的也可以这样记。'}暂不需要的项目不计入总数。</p></div>
+  {hospital&&<label className="delivery-select">查看医院清单<select aria-label="分娩方式清单" value={p.delivery} disabled={saving} onChange={e=>onChange({...p,delivery:e.target.value as Delivery},version)}><option value="both">尚未确定 · 两种都看</option><option value="vaginal">顺产清单</option><option value="cesarean">剖宫产清单</option></select></label>}
+  <p className="prep-context">{hospital?'参考你提供的仁济医院特需病房清单，具体以入住院区最新要求为准。':'医院和家里都会用的东西共用一份采购状态，不用买两遍。'} 初始状态都是“待确认”，点选即可记下。</p>
+  <div className="prep-tools"><label className="prep-search"><Search size={17}/><input aria-label="搜索准备物品" placeholder="搜物品或备注" value={query} onChange={e=>setQuery(e.target.value)}/></label><button className="text-button" onClick={add} disabled={saving||p.items.length>=200}><Plus size={18}/>添加</button></div>
+  <div className="prep-filters" aria-label="清单筛选">{(hospital?['all','unknown','todo','bought','unpacked','skip']:['all','unknown','todo','bought','skip']).map(key=><button key={key} aria-pressed={filter===key} onClick={()=>setFilter(key as Filter)}>{filterLabels[key as Filter]}</button>)}</div>
+  <div className="prep-groups">{categories.map(category=>{const list=filtered.filter(i=>i.category===category);if(!list.length)return null;return <details className="prep-group" key={category} open><summary><h3>{category}</h3><span>{list.length} 项</span></summary><div>{list.map(item=><article key={item.id} className={'prep-item '+(item.status==='skip'?'is-skipped':'')}>
+   <div className="prep-item-heading"><button className="prep-name" onClick={()=>edit(item)}><span>{item.name}</span><Settings2 size={15}/></button><span className={'prep-priority '+item.priority}>{priorityLabels[item.priority]}</span></div>
+   <p className="prep-quantity">{hospital?item.hospitalQty:item.homeQty}{item.delivery!=='both'&&hospital?' · '+(item.delivery==='vaginal'?'顺产':'剖宫产'):''}</p>
+   {item.places.length===2&&<p className="prep-shared">医院 / 家里共用采购进度</p>}
+   {item.note&&<p className="prep-note">{item.note}</p>}
+   <div className="prep-item-actions"><label className={'purchase-select '+item.status}><span className="sr-only">{item.name}采购状态</span><select aria-label={item.name+'采购状态'} value={item.status} disabled={saving} onChange={e=>changeItem(setPurchase(item,e.target.value as Purchase))}>{Object.entries(purchaseLabels).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>{hospital?<button className={'pack-button '+(item.packed?'is-packed':'')} aria-pressed={item.packed} aria-label={item.name+(item.packed?'已装包，点击取消':'标记已装包')} disabled={saving||item.status!=='bought'} onClick={()=>changeItem({...item,packed:!item.packed})}>{item.packed?<Check size={16}/>:<PackageCheck size={16}/>} {item.packed?'已装包':'装好了'}</button>:item.status!=='bought'&&item.status!=='skip'?<button className="pack-button" disabled={saving} onClick={()=>changeItem(setPurchase(item,'bought'))}><Check size={16}/> 已备好</button>:null}</div>
+   <details className="prep-guidance"><summary>准备提示 · {item.source}</summary><p>{item.guidance||'按你们实际需要准备。'}</p></details>
+  </article>)}</div></details>})}</div>
+  {!filtered.length&&<div className="prep-empty"><Check size={25}/><p>{query?'没有找到，换个词试试。':'这个分类暂时没有物品。'}</p><button className="text-button" onClick={()=>{setFilter('all');setQuery('')}}>查看全部</button></div>}
+  <details className="prep-sources"><summary>清单怎么整理的？</summary><p>医院清单优先保留数量和顺产／剖宫产差异。月嫂机构的数量作为参考，品牌推荐不作为必买依据；同物品合并，按需用品仍可自行标记不需要。医院图片未标日期，入住前再核实一次。</p><p>补充参考（2026-09-17 核验）：<a href="https://www.nhs.uk/baby/caring-for-a-newborn/what-you-will-need-for-your-baby/" target="_blank" rel="noreferrer">NHS 新生儿用品</a>、<a href="https://www.cdc.gov/sudden-infant-death/sleep-safely/" target="_blank" rel="noreferrer">CDC 安全睡眠</a>、<a href="https://www.cdc.gov/hygiene/faq/" target="_blank" rel="noreferrer">CDC 奶具清洁</a>。用药、补充剂与护理方法按医护指导。</p></details>
+  <Dialog open={!!editing} onOpenChange={open=>{if(!open&&!saving)setEditing(null)}}><DialogContent className="family-dialog" showCloseButton={false}><DialogClose className="dialog-close" aria-label="关闭" disabled={saving}><X size={20}/></DialogClose><DialogTitle>{editing?.isNew?'加一件准备物品':'调整准备物品'}</DialogTitle><DialogDescription>数量、放在哪里和自己的备注，随时能改。</DialogDescription>{editing&&<form className="edit-form" onSubmit={submit} key={editing.item.id}><label>物品名称<input name="name" required maxLength={80} defaultValue={editing.item.name}/></label><div className="form-row"><label>准备在哪里<select name="place" defaultValue={editing.item.places.length===2?'both':editing.item.places[0]}><option value="hospital">带去医院</option><option value="home">家里准备</option><option value="both">两边共用</option></select></label><label>分类<select name="category" defaultValue={editing.item.category}>{categories.map(c=><option key={c}>{c}</option>)}</select></label></div><label>医院准备数量<input name="hospitalQty" maxLength={160} defaultValue={editing.item.hospitalQty} placeholder="例如：1 包，取几片放产房袋"/></label><label>家中准备数量<input name="homeQty" maxLength={160} defaultValue={editing.item.homeQty} placeholder="例如：先备 2 包，和医院共用"/></label><div className="form-row"><label>准备建议<select name="priority" defaultValue={editing.item.priority}>{Object.entries(priorityLabels).map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label><label>医院适用清单<select name="delivery" defaultValue={editing.item.delivery}><option value="both">两种都适用</option><option value="vaginal">顺产</option><option value="cesarean">剖宫产</option></select></label></div><label>自己的备注<textarea name="note" maxLength={1000} rows={3} defaultValue={editing.item.note} placeholder="例如：已买 1 包，还差 1 包；放在卧室柜子"/></label><p className="section-note">{editing.item.guidance}</p>{error&&<p className="form-error" role="alert">{error}</p>}<button className="primary save-button" disabled={saving}>{saving?'正在保存…':'保存'}</button></form>}</DialogContent></Dialog>
+ </section>;
+}

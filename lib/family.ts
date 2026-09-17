@@ -1,6 +1,7 @@
 export type Stock={id:string;name:string;unit:string;detail:string;amount:number;daily:number;pack:number;asOf:string;lead:number;snooze:string;updatedAt:string};
 export type Visit={id:string;date:string;time:string;checks:string;prep:string;questions:string;reply:string;rentalDone:boolean;rentalNeeded:boolean;done:boolean};
-export type Family={dueDate:string;stocks:Stock[];visits:Visit[]};
+import type {Preparation} from './preparation';
+export type Family={dueDate:string;stocks:Stock[];visits:Visit[];preparation?:Preparation};
 export type Snapshot={data:Family;version:number;updatedAt:string};
 export const DAY=86400000;
 export function dayNumber(s:string){return Math.round(Date.parse(s+'T00:00:00Z')/DAY)}

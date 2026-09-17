@@ -1,6 +1,7 @@
 import {z} from 'zod';
 import {digest,equal,ITERATIONS,passwordHash,randomToken} from './security';
 import {bodySchema} from './validation';
+import {preservePreparation} from '../lib/preparation';
 export interface Env{DB:D1Database;CORS_ORIGINS:string;BOOTSTRAP_HASH?:string}
 type Row={body:string;version:number;updated_at:string;last_operation:string};
 type Auth={password_hash:string;salt:string;iterations:number};
@@ -46,9 +47,11 @@ export default {async fetch(request:Request,env:Env):Promise<Response>{
  const parsed=bodySchema.safeParse(await jsonBody(request));if(!parsed.success)return reply({error:'请检查日期、数量和文字长度。'},400);
  const p=parsed.data,before=await read(env.DB);
  if(before?.last_operation===p.operationId)return reply(snapshot(before));
- const stamp=new Date().toISOString();const result=await env.DB.prepare('UPDATE family_state SET body = ?, version = version + 1, updated_at = ?, last_operation = ? WHERE id = ? AND version = ?').bind(JSON.stringify(p.data),stamp,p.operationId,'home',p.baseVersion).run();
+ // 旧页面还可能保存备货记录；遗漏新字段时保留清单，避免覆盖已买进度。
+ const nextData=preservePreparation(p.data,before?JSON.parse(before.body):{});
+ const stamp=new Date().toISOString();const result=await env.DB.prepare('UPDATE family_state SET body = ?, version = version + 1, updated_at = ?, last_operation = ? WHERE id = ? AND version = ?').bind(JSON.stringify(nextData),stamp,p.operationId,'home',p.baseVersion).run();
  if(result.meta.changes!==1){const latest=await read(env.DB);if(latest?.last_operation===p.operationId)return reply(snapshot(latest));return reply({error:'另一台设备有更新。已刷新，请重新确认这次修改。',latest:latest?snapshot(latest):null},409)}
- return reply({data:p.data,version:p.baseVersion+1,updatedAt:stamp});
+ return reply({data:nextData,version:p.baseVersion+1,updatedAt:stamp});
  }
  return reply({error:'没有这个页面。'},404);
  }catch(e){if(e instanceof HttpError)return reply({error:e.message},e.status);console.error('Request failed',path,e instanceof Error?e.name:'UnknownError');return reply({error:'暂时无法连接，请稍后重试。'},503)}

@@ -17,8 +17,25 @@ assert.equal((await req('/api/family','PUT',{...packet,operationId:crypto.random
 const valid={...packet,operationId:crypto.randomUUID(),baseVersion:saved.data.version};const invalid=structuredClone(valid);invalid.data.dueDate='2026-02-30';assert.equal((await req('/api/family','PUT',invalid,a)).status,400);
 assert.equal((await req('/api/family','GET',undefined,a,'https://example.invalid')).status,403);
 const pair=await Promise.all([req('/api/family','PUT',{...valid,operationId:crypto.randomUUID()},a),req('/api/family','PUT',{...valid,operationId:crypto.randomUUID()},b)]);assert.deepEqual(pair.map(r=>r.status).sort(),[200,409]);
+// 清单首次保存、双设备读回、旧版页面写入及并发保护。
+const prepModule=await import('../lib/preparation.ts');
+const fresh=(await req('/api/family','GET',undefined,b)).data;
+const preparation=prepModule.createPreparation();
+preparation.items.find(i=>i.id==='pump').status='bought';
+preparation.items.find(i=>i.id==='pump').packed=true;
+const prepPacket={operationId:crypto.randomUUID(),baseVersion:fresh.version,data:{...fresh.data,preparation}};
+const prepSave=await req('/api/family','PUT',prepPacket,b);assert.equal(prepSave.status,200);
+const second=(await req('/api/family','GET',undefined,a)).data;
+assert.equal(second.data.preparation.items.find(i=>i.id==='pump').packed,true);
+const legacy=structuredClone(second.data);delete legacy.preparation;legacy.stocks[0].amount=9;
+const legacySave=await req('/api/family','PUT',{operationId:crypto.randomUUID(),baseVersion:second.version,data:legacy},a);
+assert.equal(legacySave.status,200);assert.deepEqual(legacySave.data.data.preparation,preparation);
+assert.equal((await req('/api/family','GET',undefined,b)).data.data.stocks[0].amount,9);
+const stale=await req('/api/family','PUT',{...prepPacket,operationId:crypto.randomUUID()},b);assert.equal(stale.status,409);assert.deepEqual(stale.data.latest.data.preparation,preparation);
+const invalidPrep=structuredClone(legacySave.data.data);invalidPrep.preparation.items[0].packed=true;
+assert.equal((await req('/api/family','PUT',{operationId:crypto.randomUUID(),baseVersion:legacySave.data.version,data:invalidPrep},b)).status,400);
 assert.equal((await req('/api/auth/logout','POST',undefined,a)).status,200);
 assert.equal((await req('/api/family','GET',undefined,a)).status,401);
 assert.equal((await req('/api/family','GET',undefined,b)).status,200);
 let limited=false;for(let i=0;i<10;i++){if((await req('/api/auth/login','POST',{password:'wrong-password-1234'})).status===429){limited=true;break}}assert.equal(limited,true);
-console.log('PASS: setup secret, one-time setup, two-device login, unauthorized denial, shared persistence, idempotence, stale edits, validation, CORS, concurrent updates, logout isolation, login throttling.');
+console.log('PASS: setup secret, one-time setup, two-device login, unauthorized denial, shared persistence, idempotence, stale edits, validation, CORS, concurrent updates, logout isolation, login throttling, preparation shared readback, legacy preservation and stale-preparation conflict.');
