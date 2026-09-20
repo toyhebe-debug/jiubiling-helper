@@ -1,0 +1,2 @@
+import type {HKTrip} from '../lib/hk.ts';
+export function hkFixture():HKTrip{return {version:1,title:'测试采购',date:'2030-01-01',sourceName:'sample.md',sourceVersion:'1',snapshotDate:'2029-12-01',routeSummary:'测试路线',milestones:[],route:[],stores:[],inventory:[],checks:[{id:'C01',label:'测试确认',done:false,note:''}],notes:[],sources:[],items:[{id:'P01',name:'测试商品',model:'测试型号',suggested:'1 个',region:'测试地区',origin:'测试输入',status:'未购买',check:'核对规格',sourceIds:[],actualQuantity:null,amount:null,currency:null,actualModel:'',store:'',note:''}]}}

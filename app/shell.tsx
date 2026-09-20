@@ -9,7 +9,7 @@ export default function App(){
  async function submit(e:React.FormEvent<HTMLFormElement>){
  e.preventDefault();if(busy)return;const f=new FormData(e.currentTarget);const password=String(f.get('password')||'');if(setup&&password!==f.get('confirm')){setError('两次密码不一致。');return}
  setBusy(true);setError('');
- try{const r=await apiFetch(setup?'/api/auth/setup':'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password,...(setup?{setupToken}:{})})});const d=await r.json() as {token:string;expiresAt:number;error?:string};if(!r.ok)throw new Error(d.error||'暂时无法登录。');saveSession(d);history.replaceState(null,'',location.pathname+location.search);setConfigured(true);setSigned(true)}
+ try{const r=await apiFetch(setup?'/api/auth/setup':'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password,...(setup?{setupToken}:{})})});const d=await r.json() as {token:string;expiresAt:number;error?:string};if(!r.ok)throw new Error(d.error||'暂时无法登录。');saveSession(d);if(setupToken)history.replaceState(null,'',location.pathname+location.search);setConfigured(true);setSigned(true)}
  catch(e){setError(e instanceof Error?e.message:'暂时无法登录。')}finally{setBusy(false)}
  }
  if(signed)return <FamilyApp onLogout={logout}/>;

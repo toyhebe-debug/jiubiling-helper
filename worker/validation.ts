@@ -1,4 +1,5 @@
 import {z} from 'zod';
+import {hkTripSchema} from './hk-validation.ts';
 const date=z.string().regex(/^20\d{2}-\d{2}-\d{2}$/).refine(v=>{const d=new Date(v+'T00:00:00Z');return !isNaN(d.getTime())&&d.toISOString().slice(0,10)===v});
 const text=z.string().max(8000);
 const stock=z.object({id:z.string().min(1).max(100),name:z.string().trim().min(1).max(40),unit:z.string().trim().min(1).max(10),detail:z.string().max(100),amount:z.number().min(0).max(10000),daily:z.number().positive().max(10000),pack:z.number().positive().max(10000),asOf:date,lead:z.number().int().min(0).max(30),snooze:z.union([date,z.literal('')]),updatedAt:z.string().max(40)});
@@ -6,4 +7,4 @@ const visit=z.object({id:z.string().min(1).max(100),date,time:z.string().regex(/
 const delivery=z.enum(['both','vaginal','cesarean']);
 const prepItem=z.object({id:z.string().min(1).max(100),name:z.string().trim().min(1).max(80),category:z.enum(['证件资料','妈妈用品','宝宝用品','日常洗护','喂养用品','睡眠出行']),places:z.array(z.enum(['hospital','home'])).min(1).max(2).refine(v=>new Set(v).size===v.length),delivery,priority:z.enum(['basic','optional','confirm']),hospitalQty:z.string().max(160),homeQty:z.string().max(160),guidance:z.string().max(1000),source:z.string().max(160),status:z.enum(['unknown','todo','bought','skip']),packed:z.boolean(),note:z.string().max(1000)}).refine(v=>!v.packed||(v.status==='bought'&&v.places.includes('hospital')));
 export const preparationSchema=z.object({catalogVersion:z.literal(1),delivery,items:z.array(prepItem).max(200).refine(v=>new Set(v.map(x=>x.id)).size===v.length)});
-export const bodySchema=z.object({operationId:z.string().uuid(),baseVersion:z.number().int().min(0),data:z.object({dueDate:date,stocks:z.array(stock).max(50),visits:z.array(visit).max(100),preparation:preparationSchema.optional()}).refine(v=>new Set(v.stocks.map(x=>x.id)).size===v.stocks.length&&new Set(v.visits.map(x=>x.id)).size===v.visits.length)});
+export const bodySchema=z.object({operationId:z.string().uuid(),baseVersion:z.number().int().min(0),data:z.object({dueDate:date,stocks:z.array(stock).max(50),visits:z.array(visit).max(100),preparation:preparationSchema.optional(),hkTrip:hkTripSchema.optional()}).refine(v=>new Set(v.stocks.map(x=>x.id)).size===v.stocks.length&&new Set(v.visits.map(x=>x.id)).size===v.visits.length)});

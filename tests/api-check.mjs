@@ -34,6 +34,15 @@ assert.equal((await req('/api/family','GET',undefined,b)).data.data.stocks[0].am
 const stale=await req('/api/family','PUT',{...prepPacket,operationId:crypto.randomUUID()},b);assert.equal(stale.status,409);assert.deepEqual(stale.data.latest.data.preparation,preparation);
 const invalidPrep=structuredClone(legacySave.data.data);invalidPrep.preparation.items[0].packed=true;
 assert.equal((await req('/api/family','PUT',{operationId:crypto.randomUUID(),baseVersion:legacySave.data.version,data:invalidPrep},b)).status,400);
+// 香港采购与旧页面兼容：实际金额、确认事项、旧页面写入均保留。
+const {hkFixture}=await import('./hk-fixture.ts');
+const hkFresh=(await req('/api/family','GET',undefined,a)).data;
+const hkTrip=hkFixture();hkTrip.items[0].status='已购';hkTrip.items[0].amount=42.5;hkTrip.items[0].currency='HKD';hkTrip.checks[0].done=true;
+const hkSaved=await req('/api/family','PUT',{operationId:crypto.randomUUID(),baseVersion:hkFresh.version,data:{...hkFresh.data,hkTrip}},a);assert.equal(hkSaved.status,200);
+const hkSecond=(await req('/api/family','GET',undefined,b)).data;assert.deepEqual(hkSecond.data.hkTrip,hkTrip);
+const oldClient=structuredClone(hkSecond.data);delete oldClient.hkTrip;delete oldClient.preparation;
+const keep=await req('/api/family','PUT',{operationId:crypto.randomUUID(),baseVersion:hkSecond.version,data:oldClient},b);assert.equal(keep.status,200);assert.deepEqual(keep.data.data.hkTrip,hkTrip);assert.deepEqual(keep.data.data.preparation,hkSecond.data.preparation);
+const conflict=await req('/api/family','PUT',{operationId:crypto.randomUUID(),baseVersion:hkSecond.version,data:hkSecond.data},a);assert.equal(conflict.status,409);assert.deepEqual(conflict.data.latest.data.hkTrip,hkTrip);
 assert.equal((await req('/api/auth/logout','POST',undefined,a)).status,200);
 assert.equal((await req('/api/family','GET',undefined,a)).status,401);
 assert.equal((await req('/api/family','GET',undefined,b)).status,200);
