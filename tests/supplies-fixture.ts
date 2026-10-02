@@ -1,0 +1,2 @@
+import type {Supplies} from '../lib/supplies';
+export const suppliesFixture=():Supplies=>({version:1,sourceVersion:'test',items:[{id:'test-a',category:'大件',item:'测试物品甲',status:'待确认',qty:'1件',note:'原说明',owner:''},{id:'test-b',category:'大件',item:'测试物品乙',status:'待买',qty:'1件',note:'',owner:'测试负责人'},{id:'test-c',category:'大件',item:'测试物品丙',status:'后置购买',qty:'按需',note:'',owner:''},{id:'test-d',category:'大件',item:'测试物品丁',status:'已购',qty:'1件',note:'仍需核对数量',owner:''}]});

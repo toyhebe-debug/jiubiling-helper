@@ -19,4 +19,3 @@ export function hkSummary(items:HKItem[]){
  return {bought:bought.length,total:items.filter(i=>i.status!=='取消').length,pending:items.filter(i=>i.status!=='已购'&&i.status!=='取消').length,unpriced:bought.filter(i=>i.amount===null||i.currency===null).length,totals};
 }
 export function preserveHK<T extends {hkTrip?:HKTrip}>(incoming:T,previous:{hkTrip?:HKTrip}):T{return incoming.hkTrip===undefined&&previous.hkTrip?{...incoming,hkTrip:previous.hkTrip}:incoming}
-export function pageFromHash(hash:string){return hash==='#hk'?'hk':'today'}

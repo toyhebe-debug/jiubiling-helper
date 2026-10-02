@@ -2,6 +2,7 @@ import {z} from 'zod';
 import {digest,equal,ITERATIONS,passwordHash,randomToken} from './security';
 import {bodySchema} from './validation';
 import {preservePreparation} from '../lib/preparation';
+import {preserveSupplies} from '../lib/supplies';
 import {preserveHK} from '../lib/hk';
 export interface Env{DB:D1Database;CORS_ORIGINS:string;BOOTSTRAP_HASH?:string}
 type Row={body:string;version:number;updated_at:string;last_operation:string};
@@ -50,7 +51,7 @@ export default {async fetch(request:Request,env:Env):Promise<Response>{
  if(before?.last_operation===p.operationId)return reply(snapshot(before));
  // 旧页面还可能保存备货记录；遗漏新字段时保留清单，避免覆盖已买进度。
  const previous=before?JSON.parse(before.body):{};
- const nextData=preserveHK(preservePreparation(p.data,previous),previous);
+ const nextData=preserveSupplies(preserveHK(preservePreparation(p.data,previous),previous),previous);
  const stamp=new Date().toISOString();const result=await env.DB.prepare('UPDATE family_state SET body = ?, version = version + 1, updated_at = ?, last_operation = ? WHERE id = ? AND version = ?').bind(JSON.stringify(nextData),stamp,p.operationId,'home',p.baseVersion).run();
  if(result.meta.changes!==1){const latest=await read(env.DB);if(latest?.last_operation===p.operationId)return reply(snapshot(latest));return reply({error:'另一台设备有更新。已刷新，请重新确认这次修改。',latest:latest?snapshot(latest):null},409)}
  return reply({data:nextData,version:p.baseVersion+1,updatedAt:stamp});

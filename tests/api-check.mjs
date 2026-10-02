@@ -43,6 +43,18 @@ const hkSecond=(await req('/api/family','GET',undefined,b)).data;assert.deepEqua
 const oldClient=structuredClone(hkSecond.data);delete oldClient.hkTrip;delete oldClient.preparation;
 const keep=await req('/api/family','PUT',{operationId:crypto.randomUUID(),baseVersion:hkSecond.version,data:oldClient},b);assert.equal(keep.status,200);assert.deepEqual(keep.data.data.hkTrip,hkTrip);assert.deepEqual(keep.data.data.preparation,hkSecond.data.preparation);
 const conflict=await req('/api/family','PUT',{operationId:crypto.randomUUID(),baseVersion:hkSecond.version,data:hkSecond.data},a);assert.equal(conflict.status,409);assert.deepEqual(conflict.data.latest.data.hkTrip,hkTrip);
+// 新清单共享、旧版保护、冲突和历史记录保留。
+const {suppliesFixture}=await import('./supplies-fixture.ts');
+const supplies= suppliesFixture();const current=(await req('/api/family','GET',undefined,a)).data;
+const s1=await req('/api/family','PUT',{operationId:crypto.randomUUID(),baseVersion:current.version,data:{...current.data,supplies}},a);assert.equal(s1.status,200);
+const s2=(await req('/api/family','GET',undefined,b)).data;assert.deepEqual(s2.data.supplies,supplies);
+const changed=structuredClone(s2.data);Object.assign(changed.supplies.items[1],{status:'已购',qty:'2件',note:'已核对型号；数量还需复核',owner:'测试乙'});
+const s3=await req('/api/family','PUT',{operationId:crypto.randomUUID(),baseVersion:s2.version,data:changed},b);assert.equal(s3.status,200);
+const s4=(await req('/api/family','GET',undefined,a)).data;assert.deepEqual(s4.data.supplies,changed.supplies);assert.deepEqual(s4.data.hkTrip,current.data.hkTrip);assert.deepEqual(s4.data.preparation,current.data.preparation);
+const staleSupply=await req('/api/family','PUT',{operationId:crypto.randomUUID(),baseVersion:s2.version,data:s2.data},a);assert.equal(staleSupply.status,409);assert.deepEqual(staleSupply.data.latest.data.supplies,changed.supplies);
+const without=structuredClone(s4.data);delete without.supplies;delete without.hkTrip;delete without.preparation;
+const preserved=await req('/api/family','PUT',{operationId:crypto.randomUUID(),baseVersion:s4.version,data:without},a);assert.equal(preserved.status,200);assert.deepEqual(preserved.data.data,s4.data);
+const invalidSupply=structuredClone(preserved.data.data);invalidSupply.supplies.items[0].status='已装包';assert.equal((await req('/api/family','PUT',{operationId:crypto.randomUUID(),baseVersion:preserved.data.version,data:invalidSupply},b)).status,400);
 assert.equal((await req('/api/auth/logout','POST',undefined,a)).status,200);
 assert.equal((await req('/api/family','GET',undefined,a)).status,401);
 assert.equal((await req('/api/family','GET',undefined,b)).status,200);
